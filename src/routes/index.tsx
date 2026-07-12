@@ -36,15 +36,37 @@ export const Route = createFileRoute("/")({
           "SleekBio is a minimal, luxury-grade link-in-bio builder. Craft a beautiful profile with real-time preview, templates, and share-ready QR codes.",
       },
       { property: "og:title", content: "SleekBio — Premium Link-in-Bio Builder" },
-      { property: "og:description", content: "Craft a beautiful link-in-bio profile with real-time preview." },
+      {
+        property: "og:description",
+        content: "Craft a beautiful link-in-bio profile with real-time preview.",
+      },
     ],
   }),
 });
 
 /* ---------------- Types ---------------- */
 
-type LinkItem = { id: string; label: string; url: string; thumb?: string; visible: boolean };
-type SocialKey = "instagram" | "twitter" | "youtube" | "tiktok" | "twitch" | "github" | "linkedin" | "email" | "website";
+type LinkItem = {
+  id: string;
+  label: string;
+  url: string;
+  thumb?: string;
+  visible: boolean;
+  clicks?: number;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+};
+type SocialKey =
+  | "instagram"
+  | "twitter"
+  | "youtube"
+  | "tiktok"
+  | "twitch"
+  | "github"
+  | "linkedin"
+  | "email"
+  | "website";
 type Social = { key: SocialKey; value: string };
 
 type ButtonStyle = "fill" | "outline" | "soft-shadow" | "hard-shadow";
@@ -67,6 +89,7 @@ type Template = {
   buttonStyle: ButtonStyle;
   buttonShape: ButtonShape;
   font: FontKey;
+  premium?: boolean;
 };
 
 type Profile = {
@@ -121,7 +144,7 @@ const TEMPLATES: Template[] = [
   {
     id: "midnight",
     name: "Midnight",
-    vibe: "Techy",
+    vibe: "Techy (Animated)",
     bg: "#0b0f1a",
     bg2: "#131a2d",
     card: "#141a2b",
@@ -132,6 +155,7 @@ const TEMPLATES: Template[] = [
     buttonStyle: "soft-shadow",
     buttonShape: "rounded",
     font: "sans",
+    premium: true,
   },
   {
     id: "moss",
@@ -151,7 +175,7 @@ const TEMPLATES: Template[] = [
   {
     id: "noir",
     name: "Noir Gold",
-    vibe: "Luxury",
+    vibe: "Luxury (Animated)",
     bg: "#0a0a0a",
     bg2: "#111",
     card: "#151515",
@@ -162,11 +186,12 @@ const TEMPLATES: Template[] = [
     buttonStyle: "hard-shadow",
     buttonShape: "sharp",
     font: "display",
+    premium: true,
   },
   {
     id: "blush",
     name: "Blush",
-    vibe: "Soft",
+    vibe: "Soft (Animated)",
     bg: "#f8e8ee",
     bg2: "#f0d5df",
     card: "#ffffff",
@@ -177,6 +202,7 @@ const TEMPLATES: Template[] = [
     buttonStyle: "soft-shadow",
     buttonShape: "pill",
     font: "serif",
+    premium: true,
   },
   {
     id: "ocean",
@@ -196,7 +222,7 @@ const TEMPLATES: Template[] = [
   {
     id: "brutalist",
     name: "Brutal Pop",
-    vibe: "Loud",
+    vibe: "Loud (Animated)",
     bg: "#ffffff",
     bg2: "#f4f4f4",
     card: "#ffffff",
@@ -207,10 +233,14 @@ const TEMPLATES: Template[] = [
     buttonStyle: "hard-shadow",
     buttonShape: "sharp",
     font: "mono",
+    premium: true,
   },
 ];
 
-const SOCIAL_META: Record<SocialKey, { label: string; icon: React.ElementType; placeholder: string }> = {
+const SOCIAL_META: Record<
+  SocialKey,
+  { label: string; icon: React.ElementType; placeholder: string }
+> = {
   instagram: { label: "Instagram", icon: Instagram, placeholder: "https://instagram.com/you" },
   twitter: { label: "X / Twitter", icon: Twitter, placeholder: "https://x.com/you" },
   youtube: { label: "YouTube", icon: Youtube, placeholder: "https://youtube.com/@you" },
@@ -271,6 +301,10 @@ function Index() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Hydrate from localStorage
   useEffect(() => {
@@ -280,6 +314,8 @@ function Index() {
     } catch {
       /* ignore */
     }
+    const isPremLocalStorage = localStorage.getItem("sleekbio.premium") === "true";
+    setIsPremium(isPremLocalStorage);
     setHydrated(true);
   }, []);
 
@@ -301,7 +337,10 @@ function Index() {
   const update = (patch: Partial<Profile>) => setProfile((p) => ({ ...p, ...patch }));
 
   const updateLink = (id: string, patch: Partial<LinkItem>) =>
-    setProfile((p) => ({ ...p, links: p.links.map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
+    setProfile((p) => ({
+      ...p,
+      links: p.links.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    }));
 
   const removeLink = (id: string) =>
     setProfile((p) => ({ ...p, links: p.links.filter((l) => l.id !== id) }));
@@ -309,7 +348,10 @@ function Index() {
   const addLink = () =>
     setProfile((p) => ({
       ...p,
-      links: [...p.links, { id: uid(), label: "New Link", url: "https://", visible: true }],
+      links: [
+        ...p.links,
+        { id: uid(), label: "New Link", url: "https://", visible: true, clicks: 0 },
+      ],
     }));
 
   const moveLink = (id: string, dir: -1 | 1) =>
@@ -323,7 +365,12 @@ function Index() {
       return { ...p, links: next };
     });
 
-  const applyTemplate = (t: Template) =>
+  const applyTemplate = (t: Template) => {
+    if (t.premium && !isPremium) {
+      setCheckoutOpen(true);
+      toast.error(`"${t.name}" is a Premium animated theme! Upgrade to unlock.`);
+      return;
+    }
     update({
       templateId: t.id,
       buttonStyle: t.buttonStyle,
@@ -331,6 +378,74 @@ function Index() {
       font: t.font,
       bgMode: t.bgMode,
     });
+  };
+
+  const handleLinkClick = (id: string) => {
+    setProfile((p) => ({
+      ...p,
+      links: p.links.map((l) => (l.id === id ? { ...l, clicks: (l.clicks ?? 0) + 1 } : l)),
+    }));
+  };
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setProfile((p) => {
+      const next = [...p.links];
+      const draggedItem = next[draggedIndex];
+      next.splice(draggedIndex, 1);
+      next.splice(index, 0, draggedItem);
+      return { ...p, links: next };
+    });
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const handleUpgrade = (tier: "creator" | "agency") => {
+    setIsCheckingOut(true);
+    toast.loading(
+      `Redirecting to Stripe Checkout for ${tier === "creator" ? "$5 Pass" : "$19 Pass"}...`,
+      { id: "stripe-checkout" },
+    );
+    setTimeout(() => {
+      toast.dismiss("stripe-checkout");
+      setIsCheckingOut(false);
+      setCheckoutOpen(false);
+      localStorage.setItem("sleekbio.premium", "true");
+      setIsPremium(true);
+      toast.success("Upgrade successful! Premium features unlocked.");
+    }, 1500);
+  };
+
+  const handleDowngrade = () => {
+    localStorage.removeItem("sleekbio.premium");
+    setIsPremium(false);
+    toast.info("Switched to free plan.");
+  };
+
+  const encodeProfile = (prof: Profile) => {
+    try {
+      const jsonStr = JSON.stringify(prof);
+      return btoa(encodeURIComponent(jsonStr));
+    } catch {
+      return "";
+    }
+  };
+
+  const getShareUrl = () => {
+    if (typeof window === "undefined") return "";
+    const origin = window.location.origin;
+    const handleName = (profile.handle || "you").replace(/^@/, "");
+    const base64Data = encodeProfile(profile);
+    return `${origin}/${handleName}?d=${base64Data}`;
+  };
 
   const publicUrl = `sleek.bio/${(profile.handle || "you").replace(/^@/, "")}`;
 
@@ -353,10 +468,22 @@ function Index() {
               >
                 <Share2 className="h-3.5 w-3.5" /> Share
               </button>
-              <button className="spring group inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:scale-[1.03] hover:shadow-[0_0_0_4px_rgba(241,194,97,0.14)] active:scale-[0.98]">
-                <Sparkles className="h-3.5 w-3.5" />
-                Upgrade for $5
-              </button>
+              {isPremium ? (
+                <button
+                  onClick={handleDowngrade}
+                  className="spring inline-flex items-center gap-1.5 rounded-full border border-hairline/40 bg-panel px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-destructive active:scale-[0.97]"
+                >
+                  Premium Active
+                </button>
+              ) : (
+                <button
+                  onClick={() => setCheckoutOpen(true)}
+                  className="spring group inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:scale-[1.03] hover:shadow-[0_0_0_4px_rgba(241,194,97,0.14)] active:scale-[0.98]"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Upgrade
+                </button>
+              )}
             </div>
           </header>
 
@@ -365,13 +492,18 @@ function Index() {
             <Section index="01" title="Profile">
               <div className="space-y-3">
                 <div className="flex items-center gap-4">
-                  <AvatarPicker
-                    value={profile.avatar}
-                    onChange={(v) => update({ avatar: v })}
-                  />
+                  <AvatarPicker value={profile.avatar} onChange={(v) => update({ avatar: v })} />
                   <div className="flex-1 space-y-2">
-                    <MiniField label="Name" value={profile.displayName} onChange={(v) => update({ displayName: v })} />
-                    <MiniField label="Handle" value={profile.handle} onChange={(v) => update({ handle: v })} />
+                    <MiniField
+                      label="Name"
+                      value={profile.displayName}
+                      onChange={(v) => update({ displayName: v })}
+                    />
+                    <MiniField
+                      label="Handle"
+                      value={profile.handle}
+                      onChange={(v) => update({ handle: v })}
+                    />
                   </div>
                 </div>
                 <Field
@@ -387,10 +519,7 @@ function Index() {
                     <BadgeCheck className="h-4 w-4 text-primary" />
                     Verified badge
                   </span>
-                  <Toggle
-                    checked={profile.verified}
-                    onChange={(v) => update({ verified: v })}
-                  />
+                  <Toggle checked={profile.verified} onChange={(v) => update({ verified: v })} />
                 </label>
               </div>
             </Section>
@@ -432,15 +561,25 @@ function Index() {
             <Section index="03" title="Links">
               <div className="space-y-3">
                 {profile.links.map((link, i) => (
-                  <LinkCard
+                  <div
                     key={link.id}
-                    index={i}
-                    total={profile.links.length}
-                    link={link}
-                    onChange={(patch) => updateLink(link.id, patch)}
-                    onRemove={() => removeLink(link.id)}
-                    onMove={(dir) => moveLink(link.id, dir)}
-                  />
+                    draggable
+                    onDragStart={() => handleDragStart(i)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDragEnd={handleDragEnd}
+                    className="cursor-grab active:cursor-grabbing"
+                  >
+                    <LinkCard
+                      index={i}
+                      total={profile.links.length}
+                      link={link}
+                      onChange={(patch) => updateLink(link.id, patch)}
+                      onRemove={() => removeLink(link.id)}
+                      onMove={(dir) => moveLink(link.id, dir)}
+                      isPremium={isPremium}
+                      onUpgradeClick={() => setCheckoutOpen(true)}
+                    />
+                  </div>
                 ))}
                 <button
                   onClick={addLink}
@@ -548,14 +687,19 @@ function Index() {
           />
 
           <div className="flex flex-col items-center gap-6">
-            <PhoneMockup profile={profile} template={template} />
+            <PhoneMockup
+              profile={profile}
+              template={template}
+              isPremium={isPremium}
+              onLinkClick={handleLinkClick}
+            />
             <div className="flex items-center gap-2 rounded-full border border-hairline bg-panel px-4 py-2 text-xs font-mono text-muted-foreground">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               {publicUrl}
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(`https://${publicUrl}`);
-                  toast.success("Link copied");
+                  navigator.clipboard?.writeText(getShareUrl());
+                  toast.success("Share link copied!");
                 }}
                 className="spring ml-1 rounded-full p-1 hover:bg-background hover:text-foreground"
                 aria-label="Copy link"
@@ -567,8 +711,13 @@ function Index() {
         </section>
       </div>
 
-      {shareOpen && (
-        <ShareDialog url={`https://${publicUrl}`} onClose={() => setShareOpen(false)} />
+      {shareOpen && <ShareDialog url={getShareUrl()} onClose={() => setShareOpen(false)} />}
+      {checkoutOpen && (
+        <CheckoutDialog
+          onClose={() => setCheckoutOpen(false)}
+          onUpgrade={handleUpgrade}
+          isCheckingOut={isCheckingOut}
+        />
       )}
     </main>
   );
@@ -576,12 +725,22 @@ function Index() {
 
 /* ---------------- Building blocks ---------------- */
 
-function Section({ index, title, children }: { index: string; title: string; children: React.ReactNode }) {
+function Section({
+  index,
+  title,
+  children,
+}: {
+  index: string;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div className="mb-4 flex items-baseline gap-3">
         <span className="font-mono text-[10px] tracking-widest text-primary">{index}</span>
-        <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-foreground">{title}</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-foreground">
+          {title}
+        </h2>
         <span className="h-px flex-1 bg-hairline" />
       </div>
       {children}
@@ -662,7 +821,12 @@ function Field({
           className={shared + " resize-none"}
         />
       ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={shared} />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={shared}
+        />
       )}
     </label>
   );
@@ -706,7 +870,9 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     >
       <span
         className={`spring absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full ${
-          checked ? "left-[calc(100%-14px)] bg-primary-foreground" : "left-[3px] bg-muted-foreground"
+          checked
+            ? "left-[calc(100%-14px)] bg-primary-foreground"
+            : "left-[3px] bg-muted-foreground"
         }`}
       />
     </button>
@@ -757,6 +923,8 @@ function LinkCard({
   onChange,
   onRemove,
   onMove,
+  isPremium,
+  onUpgradeClick,
 }: {
   index: number;
   total: number;
@@ -764,14 +932,32 @@ function LinkCard({
   onChange: (patch: Partial<LinkItem>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  isPremium?: boolean;
+  onUpgradeClick?: () => void;
 }) {
   const [expandThumb, setExpandThumb] = useState(!!link.thumb);
+  const [expandAnalytics, setExpandAnalytics] = useState(false);
+
   return (
     <div className="spring group rounded-xl border border-hairline bg-panel p-4 hover:border-primary/40">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Link · {String(index + 1).padStart(2, "0")}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            Link · {String(index + 1).padStart(2, "0")}
+          </span>
+          {isPremium ? (
+            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold text-emerald-400">
+              {link.clicks ?? 0} clicks
+            </span>
+          ) : (
+            <button
+              onClick={onUpgradeClick}
+              className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[9px] font-semibold text-primary hover:bg-primary/20"
+            >
+              <Sparkles className="h-2 w-2" /> Track Clicks
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <IconBtn disabled={index === 0} onClick={() => onMove(-1)} label="Move up">
             <ArrowUp className="h-3.5 w-3.5" />
@@ -786,6 +972,22 @@ function LinkCard({
           >
             <ImageIcon className="h-3.5 w-3.5" />
           </IconBtn>
+          <button
+            onClick={() => {
+              if (!isPremium) {
+                onUpgradeClick?.();
+              } else {
+                setExpandAnalytics((v) => !v);
+              }
+            }}
+            className={`spring grid h-7 px-2 place-items-center rounded-md border text-[10px] font-mono uppercase tracking-wider ${
+              expandAnalytics
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-transparent text-muted-foreground hover:border-hairline hover:bg-background hover:text-foreground"
+            }`}
+          >
+            UTM {!isPremium && "🔒"}
+          </button>
           <div className="mx-1 h-4 w-px bg-hairline" />
           <Toggle checked={link.visible} onChange={(v) => onChange({ visible: v })} />
           <IconBtn onClick={onRemove} label="Delete" danger>
@@ -803,6 +1005,33 @@ function LinkCard({
             onChange={(v) => onChange({ thumb: v })}
             placeholder="Image URL (optional)"
           />
+        )}
+        {isPremium && expandAnalytics && (
+          <div className="mt-3 space-y-2 border-t border-hairline/50 pt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+              UTM Parameters
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <MiniField
+                label="Source"
+                value={link.utmSource ?? ""}
+                onChange={(v) => onChange({ utmSource: v })}
+                placeholder="bio"
+              />
+              <MiniField
+                label="Medium"
+                value={link.utmMedium ?? ""}
+                onChange={(v) => onChange({ utmMedium: v })}
+                placeholder="social"
+              />
+              <MiniField
+                label="Campaign"
+                value={link.utmCampaign ?? ""}
+                onChange={(v) => onChange({ utmCampaign: v })}
+                placeholder="launch"
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -901,7 +1130,17 @@ function TemplateCard({
 
 /* ---------------- Phone Preview ---------------- */
 
-function PhoneMockup({ profile, template }: { profile: Profile; template: Template }) {
+function PhoneMockup({
+  profile,
+  template,
+  isPremium,
+  onLinkClick,
+}: {
+  profile: Profile;
+  template: Template;
+  isPremium?: boolean;
+  onLinkClick?: (id: string) => void;
+}) {
   const bg =
     profile.bgMode === "image" && profile.bgImage
       ? `url(${profile.bgImage}) center/cover`
@@ -913,6 +1152,12 @@ function PhoneMockup({ profile, template }: { profile: Profile; template: Templa
   const radius =
     profile.buttonShape === "sharp" ? "6px" : profile.buttonShape === "pill" ? "999px" : "14px";
 
+  let animatedClass = "";
+  if (template.id === "midnight") animatedClass = "animate-midnight";
+  else if (template.id === "noir") animatedClass = "animate-shimmer-gold";
+  else if (template.id === "blush") animatedClass = "animate-blush-bg";
+  else if (template.id === "brutalist") animatedClass = "animate-brutal-pop";
+
   return (
     <div className="relative">
       <div
@@ -920,7 +1165,7 @@ function PhoneMockup({ profile, template }: { profile: Profile; template: Templa
         style={{ background: "linear-gradient(180deg, #202024 0%, #0e0e10 100%)" }}
       >
         <div
-          className="relative h-full w-full overflow-hidden rounded-[44px]"
+          className={`relative h-full w-full overflow-hidden rounded-[44px] ${animatedClass}`}
           style={{ background: bg, color: template.text, fontFamily: font }}
         >
           {/* dim overlay when bg image */}
@@ -943,7 +1188,7 @@ function PhoneMockup({ profile, template }: { profile: Profile; template: Templa
                     src={profile.avatar}
                     alt={profile.handle}
                     className="h-full w-full object-cover"
-                    onError={(e) => ((e.currentTarget.style.display = "none"))}
+                    onError={(e) => (e.currentTarget.style.display = "none")}
                   />
                 )}
               </div>
@@ -1000,24 +1245,36 @@ function PhoneMockup({ profile, template }: { profile: Profile; template: Templa
             {/* Links */}
             <div className="mt-6 flex-1 space-y-3 overflow-y-auto pr-1">
               {profile.links.filter((l) => l.visible).length === 0 && (
-                <p className="pt-8 text-center text-xs" style={{ color: template.text, opacity: 0.4 }}>
+                <p
+                  className="pt-8 text-center text-xs"
+                  style={{ color: template.text, opacity: 0.4 }}
+                >
                   Add a link to see it appear here.
                 </p>
               )}
               {profile.links
                 .filter((l) => l.visible)
                 .map((l) => (
-                  <PreviewLinkBtn key={l.id} link={l} template={template} profile={profile} radius={radius} />
+                  <PreviewLinkBtn
+                    key={l.id}
+                    link={l}
+                    template={template}
+                    profile={profile}
+                    radius={radius}
+                    onLinkClick={onLinkClick}
+                  />
                 ))}
             </div>
 
             {/* Watermark */}
-            <p
-              className="pt-4 text-center text-[9px] uppercase tracking-[0.3em]"
-              style={{ color: template.text, opacity: 0.4 }}
-            >
-              built with sleekbio
-            </p>
+            {!isPremium && (
+              <p
+                className="pt-4 text-center text-[9px] uppercase tracking-[0.3em]"
+                style={{ color: template.text, opacity: 0.4 }}
+              >
+                built with sleekbio
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -1035,11 +1292,13 @@ function PreviewLinkBtn({
   template,
   profile,
   radius,
+  onLinkClick,
 }: {
   link: LinkItem;
   template: Template;
   profile: Profile;
   radius: string;
+  onLinkClick?: (id: string) => void;
 }) {
   const style: React.CSSProperties = { borderRadius: radius, color: template.text };
   const s = profile.buttonStyle;
@@ -1059,11 +1318,23 @@ function PreviewLinkBtn({
     style.boxShadow = `4px 4px 0 0 ${template.accent}`;
   }
 
+  let finalUrl = link.url;
+  try {
+    const urlObj = new URL(link.url);
+    if (link.utmSource) urlObj.searchParams.set("utm_source", link.utmSource);
+    if (link.utmMedium) urlObj.searchParams.set("utm_medium", link.utmMedium);
+    if (link.utmCampaign) urlObj.searchParams.set("utm_campaign", link.utmCampaign);
+    finalUrl = urlObj.toString();
+  } catch {
+    // use raw URL if invalid/relative
+  }
+
   return (
     <a
-      href={link.url}
+      href={finalUrl}
       target="_blank"
       rel="noreferrer"
+      onClick={() => onLinkClick?.(link.id)}
       className="spring group flex w-full items-center gap-3 px-3 py-3.5 text-sm font-medium hover:scale-[1.02] active:scale-[0.98]"
       style={style}
     >
@@ -1072,7 +1343,7 @@ function PreviewLinkBtn({
           src={link.thumb}
           alt=""
           className="h-8 w-8 shrink-0 rounded-md object-cover"
-          onError={(e) => ((e.currentTarget.style.display = "none"))}
+          onError={(e) => (e.currentTarget.style.display = "none")}
         />
       ) : (
         <span className="h-8 w-8 shrink-0" aria-hidden />
@@ -1142,6 +1413,125 @@ function ShareDialog({ url, onClose }: { url: string; onClose: () => void }) {
 
         <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground">
           Scan · Share · Grow
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Checkout Dialog ---------------- */
+
+function CheckoutDialog({
+  onClose,
+  onUpgrade,
+  isCheckingOut,
+}: {
+  onClose: () => void;
+  onUpgrade: (tier: "creator" | "agency") => void;
+  isCheckingOut: boolean;
+}) {
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg animate-scale-in rounded-3xl border border-hairline bg-panel p-6 shadow-2xl sm:p-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">
+              Upgrade to Premium Pass
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="spring grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Creator Pass */}
+          <div className="relative flex flex-col rounded-2xl border border-primary/20 bg-background/50 p-5 hover:border-primary/50 transition-colors">
+            <span className="absolute -top-2.5 right-4 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+              Popular
+            </span>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Creator Pass
+            </div>
+            <div className="mb-4 flex items-baseline gap-1">
+              <span className="text-3xl font-black text-foreground">$5</span>
+              <span className="text-xs text-muted-foreground">/ one-time</span>
+            </div>
+            <ul className="mb-6 space-y-2 text-xs text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Remove SleekBio watermark
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> 4 Premium Animated themes
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Real-time click analytics
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Custom UTM parameters
+              </li>
+            </ul>
+            <button
+              disabled={isCheckingOut}
+              onClick={() => onUpgrade("creator")}
+              className="spring mt-auto w-full rounded-xl bg-primary py-2.5 text-xs font-bold text-primary-foreground hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            >
+              Buy Creator Pass
+            </button>
+          </div>
+
+          {/* Agency Pass */}
+          <div className="relative flex flex-col rounded-2xl border border-hairline bg-background/30 p-5 hover:border-hairline/80 transition-colors">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Agency Pass
+            </div>
+            <div className="mb-4 flex items-baseline gap-1">
+              <span className="text-3xl font-black text-foreground">$19</span>
+              <span className="text-xs text-muted-foreground">/ one-time</span>
+            </div>
+            <ul className="mb-6 space-y-2 text-xs text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Everything in Creator Pass
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Unlimited profiles & handles
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Custom domains mapping
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> Dedicated email support
+              </li>
+            </ul>
+            <button
+              disabled={isCheckingOut}
+              onClick={() => onUpgrade("agency")}
+              className="spring mt-auto w-full rounded-xl border border-hairline bg-panel py-2.5 text-xs font-bold text-foreground hover:bg-background hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            >
+              Buy Agency Pass
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-[10px] text-muted-foreground">
+          Payments are secured by Stripe. Access is delivered instantly to your device.
         </p>
       </div>
     </div>

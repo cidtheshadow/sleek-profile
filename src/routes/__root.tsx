@@ -78,16 +78,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "SleekBio — Premium Link-in-Bio Builder" },
-      { name: "description", content: "SleekBio is a minimal, luxury-grade link-in-bio builder with a real-time mobile preview." },
+      {
+        name: "description",
+        content:
+          "SleekBio is a minimal, luxury-grade link-in-bio builder with a real-time mobile preview.",
+      },
       { property: "og:title", content: "SleekBio — Premium Link-in-Bio Builder" },
-      { property: "og:description", content: "Craft a beautiful link-in-bio profile with real-time preview." },
+      {
+        property: "og:description",
+        content: "Craft a beautiful link-in-bio profile with real-time preview.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
